@@ -97,6 +97,39 @@ export function trustCheckLines(state: TrustState): CheckLine[] {
   return lines;
 }
 
+/**
+ * O que o registro vai gravar nesta máquina. Sem participante, nada; sem
+ * desafioId, tudo o que acontecer em qualquer pasta aberta (inclusive
+ * comandos de outros projetos), o que raramente é o desejado.
+ */
+export function recordingScopeLines(participanteId: string, desafioId: string, pastasAbertas: string[]): CheckLine[] {
+  if (participanteId.trim() === '') {
+    return [
+      {
+        nivel: 'erro',
+        texto: 'repoguard.participanteId não definido: o registro do experimento está desligado e nenhum evento será gravado.',
+      },
+    ];
+  }
+  const lines: CheckLine[] = [{ nivel: 'ok', texto: `Participante: ${participanteId}.` }];
+  const desafio = desafioId.trim();
+  if (desafio === '') {
+    lines.push({
+      nivel: 'aviso',
+      texto:
+        'repoguard.desafioId vazio: serão gravados eventos de qualquer pasta aberta nesta máquina, inclusive comandos de outros projetos. Defina o nome da pasta do desafio.',
+    });
+  } else if (!pastasAbertas.some((nome) => nome.toLowerCase() === desafio.toLowerCase())) {
+    lines.push({
+      nivel: 'aviso',
+      texto: `Só a pasta "${desafio}" é registrada, e ela não está aberta nesta janela. Confira se o nome da pasta do desafio é exatamente esse.`,
+    });
+  } else {
+    lines.push({ nivel: 'ok', texto: `Registro restrito à pasta do desafio "${desafio}".` });
+  }
+  return lines;
+}
+
 /** Sem integração de shell (cmd.exe), o registro não vê os comandos digitados. */
 export function terminalCheckLine(shellPath: string, platform: string): CheckLine {
   const name = shellPath.split(/[\\/]/).pop() || 'desconhecido';

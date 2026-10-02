@@ -1,4 +1,4 @@
-import { actionsFor, terminalCheckLine, trustCheckLines, worstLevel } from '../src/environmentRules';
+import { actionsFor, recordingScopeLines, terminalCheckLine, trustCheckLines, worstLevel } from '../src/environmentRules';
 
 describe('checagens de confiança', () => {
   it('pasta-mãe confiável é erro, com ação para gerenciar a lista', () => {
@@ -41,6 +41,30 @@ describe('checagens de confiança', () => {
   it('sem pasta aberta, orienta a abrir uma pasta vazia no local dos desafios', () => {
     const lines = trustCheckLines({ enabled: true, startupPrompt: 'once', folders: [] });
     expect(lines.some((l) => l.nivel === 'aviso' && l.texto.includes('pasta vazia'))).toBe(true);
+  });
+});
+
+describe('escopo do registro', () => {
+  it('sem participante: erro, registro desligado', () => {
+    const lines = recordingScopeLines('', 'desafio-2', ['desafio-2']);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].nivel).toBe('erro');
+    expect(lines[0].texto).toContain('nenhum evento será gravado');
+  });
+
+  it('sem desafioId: aviso de que outros projetos também seriam gravados', () => {
+    const lines = recordingScopeLines('P07', '', ['desafio-2']);
+    expect(lines[1]).toMatchObject({ nivel: 'aviso' });
+    expect(lines[1].texto).toContain('outros projetos');
+  });
+
+  it('desafioId diferente da pasta aberta: aviso', () => {
+    expect(recordingScopeLines('P07', 'desafio-2', ['verificacao'])[1].nivel).toBe('aviso');
+  });
+
+  it('desafioId igual à pasta aberta: tudo certo', () => {
+    const lines = recordingScopeLines('P07', 'Desafio-2', ['desafio-2']);
+    expect(lines.every((l) => l.nivel === 'ok')).toBe(true);
   });
 });
 

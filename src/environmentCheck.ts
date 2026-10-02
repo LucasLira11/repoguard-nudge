@@ -6,6 +6,7 @@ import {
   CheckLine,
   LEVEL_SYMBOL,
   actionsFor,
+  recordingScopeLines,
   terminalCheckLine,
   trustCheckLines,
   worstLevel,
@@ -126,9 +127,11 @@ export async function verifyEnvironment(settings: ExtensionSettings, logFile: st
       : { nivel: 'erro', texto: `Não foi possível gravar o registro em ${logFile}: ${writeError}` },
   );
   lines.push(
-    settings.participanteId !== ''
-      ? { nivel: 'ok', texto: `Participante: ${settings.participanteId}.` }
-      : { nivel: 'erro', texto: 'repoguard.participanteId não definido (o registro usará "nao-definido").' },
+    ...recordingScopeLines(
+      settings.participanteId,
+      settings.desafioId,
+      (vscode.workspace.workspaceFolders ?? []).map((f) => f.name),
+    ),
   );
   lines.push(terminalCheckLine(vscode.env.shell, process.platform));
   lines.push(...trustLines());

@@ -52,6 +52,40 @@ export function resolveLogPath(configured: string, defaultDir: string): { arquiv
   return { arquivo: configured };
 }
 
+export interface RecordingScope {
+  participanteId: string;
+  desafioId: string;
+  /** Nomes das pastas abertas na janela. */
+  pastasAbertas: string[];
+}
+
+/**
+ * Decide se um evento entra no registro.
+ *
+ * Privacidade: a extensão observa terminal, tarefas e arquivos. Instalada
+ * fora de uma sessão do experimento (na máquina de um pesquisador, por
+ * exemplo), ela gravaria o histórico de comandos de todos os projetos. Por
+ * isso:
+ * - sem participante definido, nada é gravado (a proteção continua igual);
+ * - com desafioId definido, só entra o que acontece na pasta do desafio
+ *   (eventos com `pasta`) ou na janela em que ela está aberta (terminal,
+ *   tarefas, painel, sandbox). Outros projetos abertos ficam de fora.
+ * Nomes de pasta são comparados sem diferenciar maiúsculas (Windows/macOS).
+ */
+export function shouldRecord(scope: RecordingScope, pasta?: string): boolean {
+  if (scope.participanteId.trim() === '') {
+    return false;
+  }
+  const desafio = scope.desafioId.trim().toLowerCase();
+  if (desafio === '') {
+    return true;
+  }
+  if (pasta !== undefined) {
+    return pasta.toLowerCase() === desafio;
+  }
+  return scope.pastasAbertas.some((nome) => nome.toLowerCase() === desafio);
+}
+
 /** Confere se o arquivo de registro pode ser gravado. Retorna a mensagem de erro, ou undefined. */
 export async function checkWritable(file: string): Promise<string | undefined> {
   try {

@@ -10,7 +10,7 @@ import { watchHostArtifacts, watchHostExecution } from './hostActivity';
 import { terminalCanBeCaptured } from './hostMarkers';
 import { EvidencePanel } from './panel';
 import { RecordEvent, SandboxController } from './sandboxCommands';
-import { EventLog, resolveLogPath } from './telemetry';
+import { EventLog, resolveLogPath, shouldRecord } from './telemetry';
 import { AnalysisResult, ExtensionSettings } from './types';
 import { createVscodeReader } from './workspaceReader';
 
@@ -33,7 +33,19 @@ let log: vscode.LogOutputChannel | undefined;
 let weights: Promise<LoadedWeights>;
 let eventLog: EventLog | undefined;
 /** Registro do experimento. Grava nos dois modos (experimental e controle). */
-const record: RecordEvent = (evento, detalhes) => eventLog?.record(evento, detalhes);
+const record: RecordEvent = (evento, detalhes) => {
+  // Eventos de uma pasta específica trazem `pasta` nos detalhes; os demais
+  // (terminal, tarefas, painel, sandbox) valem para a janela inteira.
+  const pasta = typeof detalhes.pasta === 'string' ? detalhes.pasta : undefined;
+  const scope = {
+    participanteId: settings.participanteId,
+    desafioId: settings.desafioId,
+    pastasAbertas: (vscode.workspace.workspaceFolders ?? []).map((f) => f.name),
+  };
+  if (shouldRecord(scope, pasta)) {
+    eventLog?.record(evento, detalhes);
+  }
+};
 
 let dockerCache: { at: number; status: Promise<DockerStatus> } | undefined;
 
@@ -72,13 +84,18 @@ export function activate(context: vscode.ExtensionContext): void {
       return resolved.arquivo;
     },
     () => ({
-      participanteId: settings.participanteId || 'nao-definido',
+      participanteId: settings.participanteId,
       grupo: settings.grupo,
       desafioId: settings.desafioId || (vscode.workspace.workspaceFolders?.[0]?.name ?? 'sem-pasta'),
     }),
     (message) => debug(message),
   );
-  debug(`Registro do experimento: ${resolveLogPath(settings.caminhoRegistro, context.globalStorageUri.fsPath).arquivo}`);
+  debug(
+    settings.participanteId === ''
+      ? 'Registro do experimento desligado: defina repoguard.participanteId para gravar eventos.'
+      : `Registro do experimento: ${resolveLogPath(settings.caminhoRegistro, context.globalStorageUri.fsPath).arquivo}` +
+          (settings.desafioId !== '' ? ` (só a pasta "${settings.desafioId}")` : ''),
+  );
 
   EvidencePanel.configure((force) => {
     if (force) {
@@ -173,6 +190,7 @@ async function analyzeFolder(
     }
     debug(`  ${resultado.justificativa}`);
     record('analise_concluida', {
+      pasta: folder.name,
       origem,
       pontuacao: resultado.pontuacao,
       nivel: resultado.nivel,
@@ -186,7 +204,7 @@ async function analyzeFolder(
   } catch (error) {
     // Falha na análise não pode derrubar a extensão; a contenção não depende dela.
     debug(`Falha na análise de ${folder.name}: ${String(error)}`);
-    record('analise_concluida', { origem, falhou: true, motivo: String(error) });
+    record('analise_concluida', { pasta: folder.name, origem, falhou: true, motivo: String(error) });
     return undefined;
   }
 }

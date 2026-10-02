@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DEFAULT_LOG_FILE, EventLog, checkWritable, redactSecrets, resolveLogPath, sanitizeDetails } from '../src/telemetry';
+import { DEFAULT_LOG_FILE, EventLog, checkWritable, redactSecrets, resolveLogPath, sanitizeDetails, shouldRecord } from '../src/telemetry';
 import { TelemetryRecord } from '../src/types';
 
 const dirs: string[] = [];
@@ -108,6 +108,33 @@ describe('privacidade', () => {
     expect(JSON.stringify(out.fundo)).toContain('[…]');
     expect('vazio' in out).toBe(false);
     expect(out.lista).toHaveLength(50);
+  });
+});
+
+describe('shouldRecord (quando gravar)', () => {
+  const base = { participanteId: 'P07', desafioId: '', pastasAbertas: ['desafio-2'] };
+
+  it('sem participante, nada é gravado', () => {
+    expect(shouldRecord({ ...base, participanteId: '' })).toBe(false);
+    expect(shouldRecord({ ...base, participanteId: '   ' }, 'desafio-2')).toBe(false);
+  });
+
+  it('sem desafioId, grava tudo (escopo não restringido pelo pesquisador)', () => {
+    expect(shouldRecord(base)).toBe(true);
+    expect(shouldRecord(base, 'outro-projeto')).toBe(true);
+  });
+
+  it('com desafioId, eventos de pasta só valem para a pasta do desafio', () => {
+    const scope = { ...base, desafioId: 'desafio-2' };
+    expect(shouldRecord(scope, 'desafio-2')).toBe(true);
+    expect(shouldRecord(scope, 'DESAFIO-2')).toBe(true);
+    expect(shouldRecord(scope, 'repoguard-nudge')).toBe(false);
+  });
+
+  it('com desafioId, eventos da janela só valem se a pasta do desafio está aberta nela', () => {
+    expect(shouldRecord({ ...base, desafioId: 'desafio-2' })).toBe(true);
+    expect(shouldRecord({ ...base, desafioId: 'desafio-2', pastasAbertas: ['repoguard-nudge'] })).toBe(false);
+    expect(shouldRecord({ ...base, desafioId: 'desafio-2', pastasAbertas: [] })).toBe(false);
   });
 });
 

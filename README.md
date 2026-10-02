@@ -26,7 +26,7 @@ npm run compile
 npm test
 ```
 
-O esperado é 140 testes aprovados e 3 pulados:
+O esperado é 148 testes aprovados e 3 pulados:
 - os dois testes de link simbólico de arquivo, que exigem privilégio no Windows;
 - a integração com Docker real, que só roda com `REPOGUARD_DOCKER_IT=1`.
 
@@ -89,9 +89,9 @@ Todas têm `scope: application`: só valem nas configurações de **usuário**. 
 | Configuração | Padrão | Descrição |
 |---|---|---|
 | `repoguard.modo` | `experimental` | `experimental` ativa tudo; `controle` desliga toda a interface e mantém o registro |
-| `repoguard.participanteId` | vazio | Identificador anônimo (vazio vira `nao-definido` no registro) |
+| `repoguard.participanteId` | vazio | Identificador anônimo. **Vazio desliga o registro:** a extensão continua protegendo, mas não grava nenhum evento |
 | `repoguard.grupo` | vazio | Rótulo do grupo; se vazio, usa o modo |
-| `repoguard.desafioId` | vazio | Identificador do desafio; se vazio, usa o nome da pasta aberta |
+| `repoguard.desafioId` | vazio | Nome exato da pasta do desafio. Se definido, **só são gravados** eventos dessa pasta e da janela em que ela está aberta; outros projetos ficam de fora. Se vazio, grava eventos de qualquer pasta e usa o nome da pasta aberta como identificador |
 | `repoguard.caminhoRegistro` | vazio | Caminho **absoluto** do `.jsonl` (ou de uma pasta). Se vazio, usa o armazenamento global da extensão |
 | `repoguard.imagemContainer` | `node:20-slim` | Imagem Docker do sandbox |
 | `repoguard.comandoContainer` | `docker` | `docker` ou `podman` (alternativa gratuita, aceita os mesmos comandos) |
@@ -103,7 +103,7 @@ Os pesos do motor ficam em `config/weights.json` e podem ser recalibrados sem re
 ### Preparação de cada máquina
 
 1. Instale a extensão (`.vsix`).
-2. Nas configurações de **usuário**, defina `repoguard.modo` (conforme o sorteio), `repoguard.participanteId`, `repoguard.desafioId` e `repoguard.caminhoRegistro`.
+2. Nas configurações de **usuário**, defina `repoguard.modo` (conforme o sorteio), `repoguard.participanteId`, `repoguard.desafioId` (o **nome exato da pasta** em que o desafio será aberto) e `repoguard.caminhoRegistro`. Sem participante, nada é gravado.
 3. **Crie uma pasta vazia no local onde os desafios serão colocados** (ex.: `Downloads\verificacao`) e abra-a no VS Code. A confiança é herdada da pasta-mãe, então essa pasta mostra como o desafio vai abrir.
 4. Rode **RepoGuard: Verificar ambiente** (Ctrl+Shift+P). Ele confere e oferece corrigir com um clique:
    - Docker/Podman rodando, com a opção de baixar a imagem antes (o primeiro sandbox não espera download);
@@ -142,7 +142,7 @@ Uma linha JSON por evento:
 
 **Abandono:** `painel_cancelado` com `via: janela` registra quem fechou o VS Code com o alerta aberto. Se o processo for encerrado à força (falta de energia, "parar" a depuração), nenhum evento de saída é gravado; na análise, trate um `painel_exibido` sem `painel_cancelado` ou `sandbox_executado` depois dele, na mesma `sessaoId`, como abandono.
 
-**Privacidade:** o registro não sai da máquina. Valores de variáveis liberadas e caminhos de pastas locais não são registrados. Segredos que apareçam em comandos digitados (`API_KEY=…`, tokens do GitHub, do npm e da AWS, `Bearer …`, senhas em URLs) são mascarados como `<omitido>`. Ainda assim, os comandos digitados no terminal são registrados: informe isso no termo de consentimento.
+**Privacidade:** o registro não sai da máquina. Ele só grava com `repoguard.participanteId` definido e, com `repoguard.desafioId` definido, só a pasta do desafio. Na máquina de um pesquisador, deixe o participante vazio para a extensão não guardar o histórico de terminal dos seus projetos. Depois da sessão, apague o participante ou desinstale a extensão. Valores de variáveis liberadas e caminhos de pastas locais não são registrados. Segredos que apareçam em comandos digitados (`API_KEY=…`, tokens do GitHub, do npm e da AWS, `Bearer …`, senhas em URLs) são mascarados como `<omitido>`. Ainda assim, os comandos digitados no terminal são registrados: informe isso no termo de consentimento.
 
 ## Garantindo o Docker
 
