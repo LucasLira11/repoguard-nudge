@@ -143,16 +143,16 @@ describe('copyWorkspace', () => {
     const root = repo({ 'a.txt': '1', 'b.txt': '2', 'c.txt': '3' });
     const original = COPY_LIMITS.maxFiles;
     COPY_LIMITS.maxFiles = 2;
-    const before = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('repoguard-')));
+    // Raiz temporária própria: outros arquivos de teste, em paralelo, também
+    // criam pastas repoguard-* na pasta temporária do sistema.
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'repoguard-raiz-'));
+    dirs.push(tempRoot);
     try {
-      await expect(copyWorkspace(root)).rejects.toThrow('grande demais');
+      await expect(copyWorkspace(root, undefined, tempRoot)).rejects.toThrow('grande demais');
     } finally {
       COPY_LIMITS.maxFiles = original;
     }
-    const leaked = fs
-      .readdirSync(os.tmpdir())
-      .filter((n) => n.startsWith('repoguard-') && !n.startsWith('repoguard-ws-') && !before.has(n));
-    expect(leaked).toEqual([]);
+    expect(fs.readdirSync(tempRoot)).toEqual([]);
   });
 });
 
@@ -178,7 +178,7 @@ describe('Docker indisponível: degradação clara', () => {
     const root = repo({ 'package.json': '{}' });
     const session = new SandboxSession(root, 'node:20-slim', { command: 'repoguard-docker-que-nao-existe' });
     const result = await session.run('npm install');
-    expect(result).toMatchObject({ executado: false, codigoSaida: null });
+    expect(result).toMatchObject({ executado: false, codigoSaida: null, semRuntime: true });
     expect(result.motivo).toContain('Docker');
     expect(session.copia).toBeUndefined();
   });

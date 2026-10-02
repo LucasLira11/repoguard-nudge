@@ -133,7 +133,8 @@ Uma extensão do VS Code **não consegue instalar o Docker**, e nem deveria tent
 O que a extensão faz e o que cabe a quem a distribui:
 
 - **A extensão verifica antes de cada execução.** Distingue programa não instalado, instalado mas parado e sem resposta, e diz exatamente o que fazer. Ela nunca degrada silenciosamente para o hospedeiro.
-- **O painel avisa antes do clique.** Se o Docker/Podman não estiver disponível, o painel de evidências mostra isso junto das ações, para o usuário não tentar o sandbox sem saber que vai falhar.
+- **O painel avisa antes do clique.** Se o Docker/Podman não estiver disponível, o painel de evidências mostra um aviso junto das ações, com os botões **Como habilitar o sandbox** e **Verificar novamente**.
+- **Passo a passo de instalação junto com a extensão.** O guia `docs/instalar-container.md` (Windows, macOS e Linux, Docker e Podman, licenças e problemas comuns) abre dentro do VS Code e funciona sem internet. Ele aparece pelo aviso do painel, pela falha do sandbox, pelo "Verificar ambiente" e pelo comando **RepoGuard: Como habilitar o sandbox**.
 - **Comando "RepoGuard: Verificar ambiente".** Checklist da máquina: programa de containers, imagem baixada (com opção de baixar na hora), registro gravável, participante e modo.
 - **Podman como alternativa.** Com `repoguard.comandoContainer` = `podman`, o sandbox usa o Podman, gratuito e sem daemon com privilégio de root. Útil se a licença do Docker Desktop for um problema na instituição.
 - **No experimento, os pesquisadores preparam as máquinas** (seção acima). É a única forma de garantir que a variável estudada seja a interface, não a instalação de software.

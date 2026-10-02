@@ -5,6 +5,7 @@ import { affectsSettings, readSettings } from './config';
 import { DockerStatus, checkDocker, cliFor } from './container';
 import { LoadedWeights, loadWeights, shouldAlert } from './engine';
 import { verifyEnvironment } from './environmentCheck';
+import { openInstallGuide } from './guide';
 import { watchHostExecution } from './hostActivity';
 import { EvidencePanel } from './panel';
 import { RecordEvent, SandboxController } from './sandboxCommands';
@@ -76,6 +77,13 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   debug(`Registro do experimento: ${resolveLogPath(settings.caminhoRegistro, context.globalStorageUri.fsPath).arquivo}`);
 
+  EvidencePanel.configure((force) => {
+    if (force) {
+      dockerCache = undefined;
+    }
+    return sandboxStatus();
+  });
+
   new SandboxController(
     () => settings,
     (folder) => analyses.get(folder.uri.toString()),
@@ -86,6 +94,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ...watchHostExecution(record),
     vscode.commands.registerCommand('repoguard.analisar', () => uiOnly(reanalyze)),
     vscode.commands.registerCommand('repoguard.mostrarPainel', () => uiOnly(showPanelForPickedFolder)),
+    vscode.commands.registerCommand('repoguard.guiaInstalacao', () => uiOnly(() => openInstallGuide(context.extensionUri))),
     vscode.commands.registerCommand('repoguard.verificarAmbiente', () =>
       uiOnly(async () => {
         dockerCache = undefined;
@@ -187,7 +196,7 @@ async function handleFolder(folder: vscode.WorkspaceFolder): Promise<void> {
     return;
   }
   if (settings.modo === 'experimental') {
-    EvidencePanel.show(folder, resultado, record, sandboxStatus());
+    EvidencePanel.show(folder, resultado, record);
   }
 }
 
@@ -225,7 +234,7 @@ function showOrSummarize(folder: vscode.WorkspaceFolder, resultado: AnalysisResu
   if (resultado.evidencias.length === 0) {
     void vscode.window.showInformationMessage(`RepoGuard: ${resultado.justificativa}`);
   } else {
-    EvidencePanel.show(folder, resultado, record, sandboxStatus());
+    EvidencePanel.show(folder, resultado, record);
   }
 }
 

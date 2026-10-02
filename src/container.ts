@@ -164,8 +164,12 @@ export interface CopyStats {
  *   sozinho para o workspace real (um postinstall poderia, por exemplo,
  *   escrever um .vscode/tasks.json malicioso).
  */
-export async function copyWorkspace(sourceDir: string, signal?: AbortSignal): Promise<CopyStats> {
-  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'repoguard-'));
+export async function copyWorkspace(
+  sourceDir: string,
+  signal?: AbortSignal,
+  tempRoot: string = os.tmpdir(),
+): Promise<CopyStats> {
+  const dir = await fs.promises.mkdtemp(path.join(tempRoot, 'repoguard-'));
   if (process.platform !== 'win32') {
     await fs.promises.chmod(dir, 0o700);
   }
@@ -353,6 +357,8 @@ export interface RunResult {
   cancelado: boolean;
   /** Preenchido quando nada foi executado (ex.: Docker indisponível). */
   motivo?: string;
+  /** Nada rodou porque não há Docker/Podman disponível (a interface oferece o guia de instalação). */
+  semRuntime?: boolean;
 }
 
 function runProcess(
@@ -447,7 +453,7 @@ export class SandboxSession {
     const status = await checkDocker(this.docker);
     if (!status.disponivel) {
       // Degradação explícita: NUNCA cair silenciosamente para o hospedeiro.
-      return { executado: false, codigoSaida: null, cancelado: false, motivo: status.motivo };
+      return { executado: false, codigoSaida: null, cancelado: false, semRuntime: true, ...(status.motivo !== undefined ? { motivo: status.motivo } : {}) };
     }
     if (this.copy === undefined) {
       this.copy = await copyWorkspace(this.workspaceDir, opts.signal);

@@ -20,7 +20,14 @@ export interface PanelModel {
   sandbox?: { disponivel: boolean; motivo?: string };
 }
 
-export type PanelMessage = { type: 'inspecionar'; id: string } | { type: 'sandbox' } | { type: 'cancelar' };
+export type PanelMessage =
+  | { type: 'inspecionar'; id: string }
+  | { type: 'sandbox' }
+  | { type: 'cancelar' }
+  | { type: 'guiaInstalacao' }
+  | { type: 'verificarSandbox' };
+
+const SIMPLE_MESSAGES = new Set(['sandbox', 'cancelar', 'guiaInstalacao', 'verificarSandbox']);
 
 /**
  * Mensagens do webview são validadas e o id é só uma chave de busca: o
@@ -36,8 +43,8 @@ export function parsePanelMessage(raw: unknown): PanelMessage | undefined {
   if (msg.type === 'inspecionar' && typeof msg.id === 'string' && msg.id.length <= 1000) {
     return { type: 'inspecionar', id: msg.id };
   }
-  if (msg.type === 'sandbox' || msg.type === 'cancelar') {
-    return { type: msg.type };
+  if (typeof msg.type === 'string' && SIMPLE_MESSAGES.has(msg.type)) {
+    return { type: msg.type } as PanelMessage;
   }
   return undefined;
 }
@@ -165,6 +172,8 @@ function renderGroup(g: FileGroup): string {
 
 const ICON = `<svg class="icone" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8.6 1.5a.7.7 0 0 0-1.2 0L.6 13.7a.7.7 0 0 0 .6 1h13.6a.7.7 0 0 0 .6-1L8.6 1.5zM8 5c.4 0 .7.3.7.7v3.8a.7.7 0 0 1-1.4 0V5.7c0-.4.3-.7.7-.7zm0 8a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8z"/></svg>`;
 
+const CONTAINER_ICON = `<svg class="cartao-icone" viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" d="M8 1.5l6 3.25v6.5L8 14.5l-6-3.25v-6.5zM2 4.75L8 8l6-3.25M8 8v6.5"/></svg>`;
+
 const STYLE = `
   body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground);
          background: var(--vscode-editor-background); padding: 0 20px 32px; line-height: 1.5; }
@@ -183,8 +192,17 @@ const STYLE = `
           border: 1px solid var(--vscode-inputValidation-warningBorder); }
   .aviso-fora { border-left: 4px solid var(--vscode-errorForeground); background: var(--vscode-inputValidation-errorBackground);
           padding: 8px 12px; margin: 12px 0; }
-  .aviso-sandbox { border-left: 4px solid var(--vscode-editorWarning-foreground); background: var(--vscode-inputValidation-warningBackground);
-          padding: 8px 12px; margin: 12px 0; }
+  .cartao-sandbox { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; padding: 12px 14px;
+          background: var(--vscode-editorWidget-background); color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+          border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+          border-left: 3px solid var(--vscode-editorWarning-foreground); border-radius: 4px; }
+  .cartao-icone { width: 22px; height: 22px; flex: none; margin-top: 1px; color: var(--vscode-editorWarning-foreground); }
+  .cartao-corpo { min-width: 0; }
+  .cartao-sandbox h3 { margin: 0; font-size: 1em; font-weight: 600; }
+  .cartao-motivo { margin: 4px 0 0; }
+  .cartao-nota { margin: 4px 0 0; color: var(--vscode-descriptionForeground); }
+  .cartao-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 10px; }
+  button.compacto { padding: 3px 12px; }
   .protecao { border-left: 4px solid var(--vscode-testing-iconPassed, var(--vscode-focusBorder)); padding: 6px 12px;
           background: var(--vscode-textBlockQuote-background); }
   .acoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 24px; position: sticky; top: 0; z-index: 1; padding: 8px 0;
@@ -238,8 +256,18 @@ export function renderPanelHtml(model: PanelModel, opts: { nonce: string }): str
   const avisoSandbox =
     model.sandbox === undefined || model.sandbox.disponivel
       ? ''
-      : `<div class="aviso-sandbox"><strong>O sandbox não está disponível nesta máquina.</strong>
-         ${escapeHtml(model.sandbox.motivo ?? '')} Você ainda pode inspecionar o código: nada deste repositório foi executado.</div>`;
+      : `<section class="cartao-sandbox" role="status" aria-labelledby="sandbox-titulo">
+          ${CONTAINER_ICON}
+          <div class="cartao-corpo">
+            <h3 id="sandbox-titulo">Sandbox indisponível nesta máquina</h3>
+            <p class="cartao-motivo">${escapeHtml(model.sandbox.motivo ?? 'O programa de containers não respondeu.')}</p>
+            <p class="cartao-nota">Você continua podendo revisar todas as evidências abaixo.</p>
+            <div class="cartao-acoes">
+              <button class="secundario compacto" data-action="guiaInstalacao">Como habilitar o sandbox</button>
+              <button class="link" data-action="verificarSandbox">Verificar novamente</button>
+            </div>
+          </div>
+        </section>`;
 
   const avisoFora =
     fora.length === 0

@@ -79,6 +79,11 @@
         "command": "repoguard.verificarAmbiente",
         "title": "Verificar ambiente (container e registro)",
         "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.guiaInstalacao",
+        "title": "Como habilitar o sandbox (instalar Docker ou Podman)",
+        "category": "RepoGuard"
       }
     ],
     "menus": {
@@ -113,6 +118,10 @@
         },
         {
           "command": "repoguard.verificarAmbiente",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.guiaInstalacao",
           "when": "config.repoguard.modo == experimental"
         }
       ]

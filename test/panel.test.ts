@@ -87,7 +87,10 @@ describe('segurança do HTML', () => {
     expect(parsePanelMessage({ type: 'inspecionar', id: 'a@b:1:1' })).toEqual({ type: 'inspecionar', id: 'a@b:1:1' });
     expect(parsePanelMessage({ type: 'sandbox', extra: 'x' })).toEqual({ type: 'sandbox' });
     expect(parsePanelMessage({ type: 'inspecionar' })).toBeUndefined();
+    expect(parsePanelMessage({ type: 'guiaInstalacao' })).toEqual({ type: 'guiaInstalacao' });
+    expect(parsePanelMessage({ type: 'verificarSandbox' })).toEqual({ type: 'verificarSandbox' });
     expect(parsePanelMessage({ type: 'executarNoHospedeiro' })).toBeUndefined();
+    expect(parsePanelMessage({ type: 'constructor' })).toBeUndefined();
     expect(parsePanelMessage('cancelar')).toBeUndefined();
     expect(parsePanelMessage(null)).toBeUndefined();
   });
@@ -136,12 +139,14 @@ describe('conteúdo', () => {
       { pasta: 'x', resultado, sandbox: { disponivel: false, motivo: 'O Docker não está instalado <b>.' } },
       { nonce: NONCE },
     );
-    expect(off).toContain('O sandbox não está disponível nesta máquina.');
+    expect(off).toContain('Sandbox indisponível nesta máquina');
     expect(off).toContain('O Docker não está instalado &lt;b&gt;.');
+    expect(off).toContain('data-action="guiaInstalacao">Como habilitar o sandbox');
+    expect(off).toContain('data-action="verificarSandbox">Verificar novamente');
     const on = renderPanelHtml({ pasta: 'x', resultado, sandbox: { disponivel: true } }, { nonce: NONCE });
     const unknown = renderPanelHtml({ pasta: 'x', resultado }, { nonce: NONCE });
-    expect(on).not.toContain('class="aviso-sandbox"');
-    expect(unknown).not.toContain('class="aviso-sandbox"');
+    expect(on).not.toContain('class="cartao-sandbox"');
+    expect(unknown).not.toContain('class="cartao-sandbox"');
   });
 
   it('usa apenas variáveis de tema do VS Code para cores', () => {

@@ -153,7 +153,10 @@ export class SandboxController implements vscode.Disposable {
     if (!result.executado) {
       // Degradação clara: dizer que NADA rodou e por quê.
       out.appendLine(`[RepoGuard] Nada foi executado. ${result.motivo ?? ''}`);
-      void vscode.window.showWarningMessage(`RepoGuard: nada foi executado. ${result.motivo ?? ''}`);
+      const guia = 'Como habilitar o sandbox';
+      void vscode.window
+        .showWarningMessage(`RepoGuard: nada foi executado. ${result.motivo ?? ''}`, ...(result.semRuntime === true ? [guia] : []))
+        .then((choice) => (choice === guia ? vscode.commands.executeCommand('repoguard.guiaInstalacao') : undefined));
     } else if (result.cancelado) {
       out.appendLine(`[RepoGuard] Execução ${where} cancelada.`);
     } else {

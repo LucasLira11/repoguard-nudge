@@ -11,6 +11,12 @@ import { AnalysisResult, Evidence } from './types';
  */
 export class EvidencePanel implements vscode.Disposable {
   private static current: EvidencePanel | undefined;
+  /** Consulta a situação do Docker/Podman; force ignora o cache. Definida na ativação. */
+  private static checkSandbox: ((force: boolean) => Promise<DockerStatus>) | undefined;
+
+  static configure(checkSandbox: (force: boolean) => Promise<DockerStatus>): void {
+    EvidencePanel.checkSandbox = checkSandbox;
+  }
 
   private readonly panel: vscode.WebviewPanel;
   private readonly decoration: vscode.TextEditorDecorationType;
@@ -29,7 +35,6 @@ export class EvidencePanel implements vscode.Disposable {
     folder: vscode.WorkspaceFolder,
     resultado: AnalysisResult,
     record: RecordEvent,
-    sandboxStatus?: Promise<DockerStatus>,
   ): void {
     if (EvidencePanel.current !== undefined) {
       EvidencePanel.current.update(folder, resultado);
@@ -37,7 +42,7 @@ export class EvidencePanel implements vscode.Disposable {
     } else {
       EvidencePanel.current = new EvidencePanel(folder, resultado, record);
     }
-    EvidencePanel.current.watchSandbox(sandboxStatus);
+    EvidencePanel.current.watchSandbox(EvidencePanel.checkSandbox?.(false));
     record('painel_exibido', {
       pontuacao: resultado.pontuacao,
       nivel: resultado.nivel,
@@ -127,7 +132,7 @@ export class EvidencePanel implements vscode.Disposable {
       if (this.disposed || this.resultado !== shown) {
         return;
       }
-      this.sandbox = s.motivo !== undefined ? { disponivel: s.disponivel, motivo: s.motivo } : { disponivel: s.disponivel };
+      this.sandbox = toSandboxModel(s);
       if (!s.disponivel) {
         this.render();
       }
@@ -169,7 +174,34 @@ export class EvidencePanel implements vscode.Disposable {
         this.closeVia = 'botao';
         this.dispose();
         break;
+      case 'guiaInstalacao':
+        await vscode.commands.executeCommand('repoguard.guiaInstalacao');
+        break;
+      case 'verificarSandbox':
+        await this.recheckSandbox();
+        break;
     }
+  }
+
+  private async recheckSandbox(): Promise<void> {
+    const check = EvidencePanel.checkSandbox;
+    if (check === undefined) {
+      return;
+    }
+    const status = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: 'RepoGuard: verificando o sandbox…' },
+      () => check(true),
+    );
+    if (this.disposed) {
+      return;
+    }
+    this.sandbox = toSandboxModel(status);
+    this.render();
+    void vscode.window.showInformationMessage(
+      status.disponivel
+        ? 'RepoGuard: sandbox disponível. Você já pode usar "Executar em sandbox".'
+        : `RepoGuard: o sandbox continua indisponível. ${status.motivo ?? ''}`,
+    );
   }
 
   /**
@@ -217,6 +249,12 @@ export class EvidencePanel implements vscode.Disposable {
       linha: evidence.linha,
     });
   }
+}
+
+function toSandboxModel(status: DockerStatus): NonNullable<PanelModel['sandbox']> {
+  return status.motivo !== undefined
+    ? { disponivel: status.disponivel, motivo: status.motivo }
+    : { disponivel: status.disponivel };
 }
 
 function truncate(text: string, max: number): string {

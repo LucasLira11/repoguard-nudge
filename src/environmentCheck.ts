@@ -83,6 +83,14 @@ export async function verifyEnvironment(settings: ExtensionSettings, logFile: st
   if (allOk) {
     await vscode.window.showInformationMessage('RepoGuard: ambiente pronto.', { modal: true, detail });
   } else {
-    await vscode.window.showWarningMessage('RepoGuard: o ambiente precisa de ajustes.', { modal: true, detail });
+    const guia = 'Como habilitar o sandbox';
+    const choice = await vscode.window.showWarningMessage(
+      'RepoGuard: o ambiente precisa de ajustes.',
+      { modal: true, detail },
+      ...(status.disponivel ? [] : [guia]),
+    );
+    if (choice === guia) {
+      await vscode.commands.executeCommand('repoguard.guiaInstalacao');
+    }
   }
 }
