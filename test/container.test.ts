@@ -13,6 +13,7 @@ import {
   isValidImage,
   pullImage,
   runOnHost,
+  syncWorkspace,
   validateGrant,
 } from '../src/container';
 
@@ -156,6 +157,92 @@ describe('copyWorkspace', () => {
   });
 });
 
+describe('syncWorkspace (edições do workspace → cópia)', () => {
+  /** Marca o arquivo como editado "depois" da cópia, sem depender da resolução do relógio. */
+  function touchLater(file: string, content: string): void {
+    fs.writeFileSync(file, content);
+    const later = new Date(Date.now() + 60_000);
+    fs.utimesSync(file, later, later);
+  }
+
+  it('envia edições e arquivos novos, preserva o que só existe na cópia', async () => {
+    const root = repo({ 'app.js': 'v1', 'src/a.js': 'a' });
+    const copy = await copyWorkspace(root);
+    dirs.push(copy.dir);
+    fs.mkdirSync(path.join(copy.dir, 'node_modules', 'pkg'), { recursive: true });
+    fs.writeFileSync(path.join(copy.dir, 'node_modules', 'pkg', 'index.js'), 'dep');
+    fs.mkdirSync(path.join(copy.dir, 'dist'));
+    fs.writeFileSync(path.join(copy.dir, 'dist', 'out.js'), 'build');
+
+    touchLater(path.join(root, 'app.js'), 'v2 com mais texto');
+    fs.writeFileSync(path.join(root, 'src', 'b.js'), 'novo');
+    fs.rmSync(path.join(root, 'src', 'a.js'));
+
+    const stats = await syncWorkspace(root, copy.dir);
+    const read = (rel: string): string => fs.readFileSync(path.join(copy.dir, ...rel.split('/')), 'utf8');
+    expect(stats.atualizados).toBe(2);
+    expect(read('app.js')).toBe('v2 com mais texto');
+    expect(read('src/b.js')).toBe('novo');
+    expect(read('node_modules/pkg/index.js')).toBe('dep');
+    expect(read('dist/out.js')).toBe('build');
+    // Apagado no workspace continua na cópia até ela ser recriada.
+    expect(read('src/a.js')).toBe('a');
+    // Nada mudou: segunda sincronização não copia nada.
+    expect((await syncWorkspace(root, copy.dir)).atualizados).toBe(0);
+  });
+
+  it('não segue uma pasta-link plantada na cópia (escaparia para fora dela)', async () => {
+    const root = repo({ 'src/index.js': 'original' });
+    const copy = await copyWorkspace(root);
+    dirs.push(copy.dir);
+    // "Fora do container": uma pasta da máquina que o código malicioso quer alcançar.
+    const alvo = fs.mkdtempSync(path.join(os.tmpdir(), 'repoguard-alvo-'));
+    dirs.push(alvo);
+    fs.writeFileSync(path.join(alvo, 'segredo.txt'), 'intacto');
+    // O código do container troca copy/src por um link para o alvo.
+    fs.rmSync(path.join(copy.dir, 'src'), { recursive: true });
+    fs.symlinkSync(alvo, path.join(copy.dir, 'src'), 'junction');
+
+    touchLater(path.join(root, 'src', 'index.js'), 'editado pelo usuário');
+    await syncWorkspace(root, copy.dir);
+
+    expect(fs.readdirSync(alvo)).toEqual(['segredo.txt']);
+    expect(fs.readFileSync(path.join(alvo, 'segredo.txt'), 'utf8')).toBe('intacto');
+    expect(fs.lstatSync(path.join(copy.dir, 'src')).isSymbolicLink()).toBe(false);
+    expect(fs.readFileSync(path.join(copy.dir, 'src', 'index.js'), 'utf8')).toBe('editado pelo usuário');
+  });
+
+  const canSymlinkFiles = ((): boolean => {
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'repoguard-probe-'));
+    try {
+      fs.writeFileSync(path.join(probe, 'a'), '');
+      fs.symlinkSync(path.join(probe, 'a'), path.join(probe, 'b'));
+      return true;
+    } catch {
+      return false; // Windows sem Modo Desenvolvedor/privilégio de link.
+    } finally {
+      fs.rmSync(probe, { recursive: true, force: true });
+    }
+  })();
+
+  (canSymlinkFiles ? it : it.skip)('não grava através de um arquivo-link plantado na cópia', async () => {
+    const root = repo({ 'app.js': 'original' });
+    const copy = await copyWorkspace(root);
+    dirs.push(copy.dir);
+    const alvo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'repoguard-alvo-')), 'authorized_keys');
+    dirs.push(path.dirname(alvo));
+    fs.writeFileSync(alvo, 'chave legítima');
+    fs.rmSync(path.join(copy.dir, 'app.js'));
+    fs.symlinkSync(alvo, path.join(copy.dir, 'app.js'));
+
+    touchLater(path.join(root, 'app.js'), 'conteúdo do repositório');
+    await syncWorkspace(root, copy.dir);
+
+    expect(fs.readFileSync(alvo, 'utf8')).toBe('chave legítima');
+    expect(fs.lstatSync(path.join(copy.dir, 'app.js')).isSymbolicLink()).toBe(false);
+  });
+});
+
 describe('Docker indisponível: degradação clara', () => {
   it('Docker não instalado', async () => {
     const status = await checkDocker({ command: 'repoguard-docker-que-nao-existe' });
@@ -217,6 +304,54 @@ describe('SandboxSession com Docker falso', () => {
 
     await session.dispose();
     expect(fs.existsSync(copyDir)).toBe(false);
+  });
+
+  it('envia as edições feitas entre um comando e outro', async () => {
+    const root = repo({ 'app.js': 'v1' });
+    const session = new SandboxSession(root, 'node:20-slim', FAKE_DOCKER);
+    await session.run('npm install');
+    const file = path.join(root, 'app.js');
+    fs.writeFileSync(file, 'v2 editado');
+    const later = new Date(Date.now() + 60_000);
+    fs.utimesSync(file, later, later);
+
+    let output = '';
+    await session.run('npm start', { onOutput: (c) => (output += c) });
+    expect(output).toContain('1 arquivo(s) editado(s) enviado(s) para a cópia isolada');
+    expect(fs.readFileSync(path.join(session.copia?.dir as string, 'app.js'), 'utf8')).toBe('v2 editado');
+    await session.dispose();
+  });
+
+  it('não sincroniza nem recria a cópia com outro comando rodando', async () => {
+    const root = repo({ 'app.js': 'v1' });
+    const session = new SandboxSession(root, 'node:20-slim', FAKE_DOCKER);
+    await session.run('npm install');
+
+    process.env.FAKE_DOCKER_SLEEP_MS = '1500';
+    let first: Promise<unknown>;
+    try {
+      first = session.run('npm start'); // "servidor" rodando
+      while (session.emExecucao === 0) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    } finally {
+      delete process.env.FAKE_DOCKER_SLEEP_MS;
+    }
+    await expect(session.resetCopy()).rejects.toThrow('Há um comando rodando');
+
+    const file = path.join(root, 'app.js');
+    fs.writeFileSync(file, 'v2');
+    const later = new Date(Date.now() + 60_000);
+    fs.utimesSync(file, later, later);
+    let output = '';
+    await session.run('npm test', { onOutput: (c) => (output += c) });
+    expect(output).toContain('Outro comando ainda está rodando neste sandbox');
+    expect(fs.readFileSync(path.join(session.copia?.dir as string, 'app.js'), 'utf8')).toBe('v1');
+
+    await first;
+    expect(session.emExecucao).toBe(0);
+    await session.resetCopy();
+    expect(session.copia).toBeUndefined();
   });
 
   it('repassa o código de saída', async () => {

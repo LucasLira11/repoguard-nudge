@@ -49,6 +49,7 @@ export class SandboxController implements vscode.Disposable {
           ),
         ),
       ),
+      vscode.commands.registerCommand('repoguard.recriarCopia', () => this.guard(() => this.recreateCopy())),
       vscode.commands.registerCommand('repoguard.liberarPorta', () => this.guard(() => this.requestPort())),
       vscode.commands.registerCommand('repoguard.liberarPasta', () => this.guard(() => this.requestFolder())),
       vscode.commands.registerCommand('repoguard.liberarVariavel', () => this.guard(() => this.requestVariable())),
@@ -146,6 +147,23 @@ export class SandboxController implements vscode.Disposable {
       concessoes: session.concessoes.map((g) => g.tipo),
     });
     this.reportResult(result, 'no container');
+  }
+
+  /** Descarta a cópia isolada; o próximo comando copia o projeto do zero. */
+  async recreateCopy(): Promise<void> {
+    const folder = await this.pickFolder();
+    if (folder === undefined) {
+      return;
+    }
+    const session = this.sessions.get(folder.uri.toString());
+    if (session?.copia === undefined) {
+      void vscode.window.showInformationMessage('RepoGuard: ainda não há cópia isolada; ela será criada no primeiro comando do sandbox.');
+      return;
+    }
+    await session.resetCopy();
+    void vscode.window.showInformationMessage(
+      'RepoGuard: cópia descartada. O próximo comando no sandbox copia o projeto de novo; rode a instalação das dependências outra vez.',
+    );
   }
 
   private reportResult(result: RunResult, where: string): void {

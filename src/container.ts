@@ -222,6 +222,105 @@ export async function copyWorkspace(
   }
 }
 
+export interface SyncStats {
+  /** Arquivos novos ou editados enviados para a cópia. */
+  atualizados: number;
+  linksIgnorados: number;
+}
+
+async function lstatOrUndefined(p: string): Promise<fs.Stats | undefined> {
+  try {
+    return await fs.promises.lstat(p);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Envia para a cópia isolada os arquivos editados no workspace desde a
+ * última execução. Sentido único: workspace → cópia. Nada volta.
+ *
+ * Segurança: o código do repositório roda com permissão de escrita na cópia
+ * e pode plantar ali um link simbólico com o nome de um arquivo do projeto
+ * (`app.js -> ~/.ssh/authorized_keys`) ou trocar uma pasta por um link para
+ * fora dela. Se a sincronização gravasse por cima seguindo esse link, o
+ * conteúdo do repositório seria escrito na máquina do usuário: uma fuga do
+ * container. Por isso cada pasta e cada arquivo de destino é verificado com
+ * lstat, links são apagados sem ser seguidos e a gravação usa COPYFILE_EXCL.
+ * Quem chama garante que nenhum container desta cópia está rodando durante a
+ * sincronização (sem isso, a verificação e a gravação poderiam ser intercaladas).
+ *
+ * Arquivos que existem só na cópia (node_modules, dist/, gerados lá dentro)
+ * são preservados; arquivos apagados no workspace também continuam na cópia
+ * até ela ser recriada.
+ */
+export async function syncWorkspace(sourceDir: string, copyDir: string, signal?: AbortSignal): Promise<SyncStats> {
+  const stats: SyncStats = { atualizados: 0, linksIgnorados: 0 };
+  let arquivos = 0;
+  let bytes = 0;
+
+  const ensureRealDir = async (p: string): Promise<void> => {
+    const info = await lstatOrUndefined(p);
+    if (info === undefined) {
+      await fs.promises.mkdir(p);
+    } else if (info.isSymbolicLink() || !info.isDirectory()) {
+      // rm não segue links: remove o link plantado, não o alvo dele.
+      await fs.promises.rm(p, { recursive: true, force: true });
+      await fs.promises.mkdir(p);
+    }
+  };
+
+  const walk = async (from: string, to: string): Promise<void> => {
+    await ensureRealDir(to);
+    for (const entry of await fs.promises.readdir(from, { withFileTypes: true })) {
+      if (signal?.aborted === true) {
+        throw new Error('Sincronização cancelada.');
+      }
+      const src = path.join(from, entry.name);
+      const dst = path.join(to, entry.name);
+      if (entry.isSymbolicLink()) {
+        stats.linksIgnorados++;
+        continue;
+      }
+      if (entry.isDirectory()) {
+        if (EXCLUDED_DIRS.has(entry.name) || (await fs.promises.lstat(src)).isSymbolicLink()) {
+          continue;
+        }
+        await walk(src, dst);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const srcInfo = await fs.promises.lstat(src);
+      arquivos++;
+      bytes += srcInfo.size;
+      if (arquivos > COPY_LIMITS.maxFiles || bytes > COPY_LIMITS.maxBytes) {
+        throw new Error('O repositório ficou grande demais para a cópia de contenção.');
+      }
+      const dstInfo = await lstatOrUndefined(dst);
+      const unchanged =
+        dstInfo !== undefined &&
+        dstInfo.isFile() &&
+        !dstInfo.isSymbolicLink() &&
+        dstInfo.size === srcInfo.size &&
+        dstInfo.mtimeMs >= srcInfo.mtimeMs;
+      if (unchanged) {
+        continue;
+      }
+      if (dstInfo !== undefined) {
+        await fs.promises.rm(dst, { recursive: true, force: true });
+      }
+      // EXCL: falha em vez de gravar se algo reaparecer no caminho.
+      await fs.promises.copyFile(src, dst, fs.constants.COPYFILE_EXCL);
+      stats.atualizados++;
+    }
+  };
+
+  await walk(sourceDir, copyDir);
+  return stats;
+}
+
 // ------------------------------------------------------------------- docker
 
 export interface DockerStatus {
@@ -410,6 +509,10 @@ function hostUser(): string | undefined {
 export class SandboxSession {
   private copy: CopyStats | undefined;
   private readonly grants: ContainerGrant[] = [];
+  /** Containers desta sessão rodando agora. */
+  private running = 0;
+  /** Serializa a preparação da cópia entre comandos disparados ao mesmo tempo. */
+  private prepQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     readonly workspaceDir: string,
@@ -426,6 +529,10 @@ export class SandboxSession {
     return this.copy;
   }
 
+  get emExecucao(): number {
+    return this.running;
+  }
+
   addGrant(grant: ContainerGrant): void {
     const v = validateGrant(grant);
     if (v.erro !== undefined) {
@@ -438,12 +545,45 @@ export class SandboxSession {
     this.grants.length = 0;
   }
 
-  /** Descarta a cópia atual e copia o workspace de novo no próximo comando. */
-  async resetCopy(): Promise<void> {
-    if (this.copy !== undefined) {
-      await fs.promises.rm(this.copy.dir, { recursive: true, force: true });
-      this.copy = undefined;
+  /**
+   * Descarta a cópia atual; o próximo comando copia o workspace de novo.
+   * Recusa enquanto houver container rodando, que ainda usa a cópia.
+   */
+  async resetCopy(force = false): Promise<void> {
+    if (this.running > 0 && !force) {
+      throw new Error('Há um comando rodando neste sandbox. Espere terminar (ou cancele) antes de recriar a cópia.');
     }
+    if (this.copy !== undefined) {
+      const dir = this.copy.dir;
+      this.copy = undefined;
+      await fs.promises.rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** Cria a cópia no primeiro comando; nos seguintes, envia as edições do workspace. */
+  private async prepareCopy(opts: RunOptions): Promise<CopyStats> {
+    if (this.copy === undefined) {
+      this.copy = await copyWorkspace(this.workspaceDir, opts.signal);
+      opts.onOutput?.(
+        `[RepoGuard] Cópia isolada criada: ${this.copy.arquivos} arquivo(s)` +
+          (this.copy.linksIgnorados > 0 ? `, ${this.copy.linksIgnorados} link(s) simbólico(s) ignorado(s)` : '') +
+          '.\n',
+      );
+      return this.copy;
+    }
+    if (this.running > 0) {
+      // Sincronizar com um container rodando abriria espaço para ele trocar
+      // um arquivo por um link entre a verificação e a gravação.
+      opts.onOutput?.(
+        '[RepoGuard] Outro comando ainda está rodando neste sandbox: as edições recentes não foram enviadas para a cópia.\n',
+      );
+      return this.copy;
+    }
+    const sync = await syncWorkspace(this.workspaceDir, this.copy.dir, opts.signal);
+    if (sync.atualizados > 0) {
+      opts.onOutput?.(`[RepoGuard] ${sync.atualizados} arquivo(s) editado(s) enviado(s) para a cópia isolada.\n`);
+    }
+    return this.copy;
   }
 
   async run(command: string, opts: RunOptions = {}): Promise<RunResult> {
@@ -455,51 +595,57 @@ export class SandboxSession {
       // Degradação explícita: NUNCA cair silenciosamente para o hospedeiro.
       return { executado: false, codigoSaida: null, cancelado: false, semRuntime: true, ...(status.motivo !== undefined ? { motivo: status.motivo } : {}) };
     }
-    if (this.copy === undefined) {
-      this.copy = await copyWorkspace(this.workspaceDir, opts.signal);
-      opts.onOutput?.(
-        `[RepoGuard] Cópia isolada criada: ${this.copy.arquivos} arquivo(s)` +
-          (this.copy.linksIgnorados > 0 ? `, ${this.copy.linksIgnorados} link(s) simbólico(s) ignorado(s)` : '') +
-          '.\n',
-      );
-    }
 
-    const containerName = `repoguard-${crypto.randomBytes(6).toString('hex')}`;
-    const user = hostUser();
-    const args = buildDockerArgs({
-      copyDir: this.copy.dir,
-      image: this.image,
-      command,
-      grants: this.grants,
-      containerName,
-      runtime: this.docker.runtime ?? 'docker',
-      ...(user !== undefined ? { hostUser: user } : {}),
+    // A contagem de execução sobe dentro da fila, junto com a preparação:
+    // assim o próximo comando da fila já vê este como "rodando".
+    const prepared = this.prepQueue.then(async () => {
+      const copy = await this.prepareCopy(opts);
+      this.running++;
+      return copy;
     });
+    this.prepQueue = prepared.catch(() => undefined);
+    const copy = await prepared;
 
-    // O ambiente do processo docker (CLI) precisa de PATH/DOCKER_HOST, mas
-    // nada dele entra no container, exceto as variáveis liberadas com -e.
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    for (const grant of this.grants) {
-      if (grant.tipo === 'variavel') {
-        env[grant.nome] = grant.valor;
+    try {
+      const containerName = `repoguard-${crypto.randomBytes(6).toString('hex')}`;
+      const user = hostUser();
+      const args = buildDockerArgs({
+        copyDir: copy.dir,
+        image: this.image,
+        command,
+        grants: this.grants,
+        containerName,
+        runtime: this.docker.runtime ?? 'docker',
+        ...(user !== undefined ? { hostUser: user } : {}),
+      });
+
+      // O ambiente do processo docker (CLI) precisa de PATH/DOCKER_HOST, mas
+      // nada dele entra no container, exceto as variáveis liberadas com -e.
+      const env: NodeJS.ProcessEnv = { ...process.env };
+      for (const grant of this.grants) {
+        if (grant.tipo === 'variavel') {
+          env[grant.nome] = grant.valor;
+        }
       }
-    }
 
-    return runProcess(this.docker.command, [...(this.docker.baseArgs ?? []), ...args], {
-      ...opts,
-      env,
-      // Matar o cliente docker não para o container; removê-lo pelo nome sim.
-      onAbort: () => {
-        spawn(this.docker.command, [...(this.docker.baseArgs ?? []), 'rm', '-f', containerName], {
-          env: process.env,
-          windowsHide: true,
-        }).on('error', () => undefined);
-      },
-    });
+      return await runProcess(this.docker.command, [...(this.docker.baseArgs ?? []), ...args], {
+        ...opts,
+        env,
+        // Matar o cliente docker não para o container; removê-lo pelo nome sim.
+        onAbort: () => {
+          spawn(this.docker.command, [...(this.docker.baseArgs ?? []), 'rm', '-f', containerName], {
+            env: process.env,
+            windowsHide: true,
+          }).on('error', () => undefined);
+        },
+      });
+    } finally {
+      this.running--;
+    }
   }
 
   async dispose(): Promise<void> {
-    await this.resetCopy();
+    await this.resetCopy(true);
   }
 }
 

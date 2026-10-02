@@ -56,6 +56,11 @@
         "category": "RepoGuard"
       },
       {
+        "command": "repoguard.recriarCopia",
+        "title": "Recriar cópia do sandbox",
+        "category": "RepoGuard"
+      },
+      {
         "command": "repoguard.liberarPorta",
         "title": "Solicitar liberação de porta",
         "category": "RepoGuard"
@@ -122,6 +127,10 @@
         },
         {
           "command": "repoguard.guiaInstalacao",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.recriarCopia",
           "when": "config.repoguard.modo == experimental"
         }
       ]

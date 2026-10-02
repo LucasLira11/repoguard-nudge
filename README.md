@@ -26,8 +26,8 @@ npm run compile
 npm test
 ```
 
-O esperado é 123 testes aprovados e 2 pulados:
-- o teste de link simbólico de arquivo, que exige privilégio no Windows;
+O esperado é 127 testes aprovados e 3 pulados:
+- os dois testes de link simbólico de arquivo, que exigem privilégio no Windows;
 - a integração com Docker real, que só roda com `REPOGUARD_DOCKER_IT=1`.
 
 Para rodar também a integração com Docker real, que baixa `node:20-slim` (no PowerShell):
@@ -58,6 +58,15 @@ $env:REPOGUARD_DOCKER_IT="1"; npm test
 | Liberações | Paleta (Ctrl+Shift+P) → "RepoGuard: Solicitar liberação de…" | Um diálogo por liberação. O hospedeiro exige digitar o nome da pasta |
 | Modo controle | Configurações de **usuário**: `repoguard.modo` = `controle` | Nada visível (nem painel, nem comandos, nem canal no Output). O registro continua |
 | Configuração hostil | Na fixture, crie `.vscode/settings.json` com `"repoguard.modo": "controle"` | Ignorado: a extensão continua em modo experimental |
+
+## Usando o sandbox no dia a dia
+
+1. **Edite o código normalmente** no VS Code. Os arquivos que você edita são os do projeto real.
+2. **Rode comandos pelo sandbox:** Ctrl+Shift+P → **RepoGuard: Executar comando em sandbox** (`npm install`, `npm start`, `npm test`…). O primeiro comando cria a cópia isolada. Antes de cada comando seguinte, os arquivos que você editou são enviados para ela.
+3. **Aplicações web:** antes do `npm start`, use **RepoGuard: Solicitar liberação de porta** e abra `http://localhost:<porta>` no navegador.
+4. **Recomeçar do zero:** **RepoGuard: Recriar cópia do sandbox** descarta a cópia. Depois, rode a instalação das dependências de novo.
+
+A cópia é de **mão única**: o que o código faz dentro do container (`node_modules`, `dist/`, arquivos alterados) **não volta** para o projeto. Por isso o `node_modules` não aparece na pasta real, e o autocompletar do VS Code não enxerga os tipos das dependências. É o preço do isolamento: um `postinstall` malicioso não consegue escrever nada no projeto nem na sua máquina.
 
 ## Empacotar e instalar
 
@@ -186,6 +195,7 @@ src/
 - **Contenção:**
   - só a cópia do projeto é montada no container, sem `node_modules`, `.git` e links simbólicos;
   - a cópia é de mão única: nada volta sozinho para o projeto real;
+  - a sincronização (workspace → cópia) verifica cada pasta e arquivo de destino e apaga links plantados pelo container sem segui-los; ela só roda quando nenhum container da sessão está ativo. Sem isso, o código do repositório poderia trocar `app.js` por um link para um arquivo da máquina, e a próxima sincronização escreveria nele;
   - a rede **não** é desligada, porque `npm install` precisa dela: a proteção vem da ausência de segredos no container;
   - portas liberadas ficam acessíveis só nesta máquina, não na rede local;
   - o valor de uma variável liberada não aparece na linha de comando;
@@ -198,6 +208,9 @@ src/
 - **Exceção ao silêncio:** uma evidência que roda fora do container (tarefa `folderOpen`, `initializeCommand`) garante no mínimo o nível MÉDIO, porque ali a contenção não protege.
 
 ### Limitações conhecidas
+
+- **Dependências fora da pasta real:** o `node_modules` existe só na cópia isolada, então o autocompletar do VS Code não vê os tipos das bibliotecas. Arquivos apagados no projeto continuam na cópia até ela ser recriada.
+- **Edições durante um comando longo:** com um comando ainda rodando no sandbox (ex.: `npm start`), as edições só são enviadas no próximo comando depois que ele terminar.
 
 - **Rede local e metadados de nuvem:** com a rede ligada, o container ainda alcança serviços da rede local e, em máquinas virtuais de nuvem, o endpoint de metadados (169.254.169.254).
 - **Limites da análise estática:** `require(variavel)` dinâmico, código baixado em tempo de execução e dependências instaladas a partir de URLs git ou `.tgz` não são analisados. Nesses casos, a proteção é o container.

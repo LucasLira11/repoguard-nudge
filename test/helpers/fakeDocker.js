@@ -34,7 +34,9 @@ if (args[0] === 'run') {
   // Ecoa os argumentos e a variável liberada, para o teste conferir o que
   // chegaria ao container.
   process.stdout.write(JSON.stringify({ args, apiUrl: process.env.API_URL ?? null }) + '\n');
-  process.exit(Number(process.env.FAKE_DOCKER_EXIT ?? '0'));
+  // FAKE_DOCKER_SLEEP_MS simula um comando demorado (ex.: um servidor rodando).
+  setTimeout(() => process.exit(Number(process.env.FAKE_DOCKER_EXIT ?? '0')), Number(process.env.FAKE_DOCKER_SLEEP_MS ?? '0'));
+  return;
 }
 
 if (args[0] === 'rm') {
