@@ -1,0 +1,10 @@
+.vscode/**
+src/**
+test/**
+**/*.map
+**/*.ts
+tsconfig*.json
+jest.config.js
+!config/weights.json
+scripts/**
+*.vsix

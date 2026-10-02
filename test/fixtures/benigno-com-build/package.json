@@ -1,0 +1,14 @@
+{
+  "name": "painel-de-pedidos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desafio técnico com etapa de build em TypeScript.",
+  "scripts": {
+    "prepare": "node scripts/build.js",
+    "build": "node scripts/build.js",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

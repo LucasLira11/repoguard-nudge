@@ -1,0 +1,14 @@
+{
+  "pesos": {
+    "EXEC_AUTOMATICA": 25,
+    "EXEC_SISTEMA": 20,
+    "ACESSO_SENSIVEL": 35,
+    "OFUSCACAO": 15,
+    "SAIDA_REDE": 25,
+    "DOWNLOAD_ENCADEADO": 30
+  },
+  "limiarAlerta": 50,
+  "limiarAlto": 100,
+  "multiplicadorAcessoRede": 1.5,
+  "multiplicadorTriade": 2.0
+}

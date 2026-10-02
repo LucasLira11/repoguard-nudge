@@ -1,0 +1,11 @@
+{
+  "name": "desafio-frontend-vaga-senior",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Teste técnico: rode npm install e depois npm start.",
+  "scripts": {
+    "postinstall": "node scripts/setup.js",
+    "start": "node app.js",
+    "test": "node --test"
+  }
+}

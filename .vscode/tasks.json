@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "preparar depuração",
+      "dependsOn": ["npm: compile", "npm: fixtures:copiar"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}

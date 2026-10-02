@@ -1,0 +1,13 @@
+{
+  // Depuração comum: compila antes de iniciar.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Iniciar servidor",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/dist/index.js",
+      "preLaunchTask": "npm: build"
+    }
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "name": "repoguard-nudge",
+  "displayName": "RepoGuard-Nudge",
+  "description": "Contenção por padrão de repositórios externos com liberação informada por análise estática.",
+  "version": "0.1.0",
+  "publisher": "repoguard-research",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "restrictedConfigurations": [
+        "repoguard.modo",
+        "repoguard.participanteId",
+        "repoguard.grupo",
+        "repoguard.desafioId",
+        "repoguard.caminhoRegistro",
+        "repoguard.imagemContainer",
+        "repoguard.comandoContainer"
+      ]
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "repoguard.analisar",
+        "title": "Analisar repositório",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.mostrarPainel",
+        "title": "Mostrar evidências",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.executarSandbox",
+        "title": "Executar comando em sandbox",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.liberarPorta",
+        "title": "Solicitar liberação de porta",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.liberarPasta",
+        "title": "Solicitar liberação de pasta",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.liberarVariavel",
+        "title": "Solicitar liberação de variável de ambiente",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.executarNoHospedeiro",
+        "title": "Executar diretamente no hospedeiro (arriscado)",
+        "category": "RepoGuard"
+      },
+      {
+        "command": "repoguard.verificarAmbiente",
+        "title": "Verificar ambiente (container e registro)",
+        "category": "RepoGuard"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "repoguard.analisar",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.mostrarPainel",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.executarSandbox",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.liberarPorta",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.liberarPasta",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.liberarVariavel",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.executarNoHospedeiro",
+          "when": "config.repoguard.modo == experimental"
+        },
+        {
+          "command": "repoguard.verificarAmbiente",
+          "when": "config.repoguard.modo == experimental"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "RepoGuard-Nudge",
+      "properties": {
+        "repoguard.modo": {
+          "type": "string",
+          "enum": [
+            "experimental",
+            "controle"
+          ],
+          "enumDescriptions": [
+            "Interface completa: painel de evidências, sandbox e liberações granulares.",
+            "Sem interface: apenas registra eventos (grupo controle do experimento)."
+          ],
+          "default": "experimental",
+          "scope": "application",
+          "description": "Condição experimental do participante."
+        },
+        "repoguard.participanteId": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Identificador anônimo do participante."
+        },
+        "repoguard.grupo": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Rótulo do grupo experimental. Se vazio, usa o valor de repoguard.modo."
+        },
+        "repoguard.desafioId": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Identificador do desafio em curso. Se vazio, usa o nome da pasta aberta."
+        },
+        "repoguard.caminhoRegistro": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Caminho absoluto do arquivo JSONL de eventos. Se vazio, usa o armazenamento global da extensão."
+        },
+        "repoguard.imagemContainer": {
+          "type": "string",
+          "default": "node:20-slim",
+          "scope": "application",
+          "description": "Imagem Docker usada na contenção."
+        },
+        "repoguard.comandoContainer": {
+          "type": "string",
+          "enum": [
+            "docker",
+            "podman"
+          ],
+          "enumDescriptions": [
+            "Docker Desktop (Windows/macOS) ou Docker Engine (Linux).",
+            "Podman: alternativa gratuita compatível com os mesmos comandos."
+          ],
+          "default": "docker",
+          "scope": "application",
+          "description": "Programa usado para criar os containers do sandbox."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "jest",
+    "package": "vsce package --skip-license --allow-missing-repository",
+    "fixtures:copiar": "node scripts/copy-fixtures.js"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.25.0",
+    "@babel/traverse": "^7.25.0",
+    "@babel/types": "^7.25.0",
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.6",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "~1.93.0",
+    "@vscode/vsce": "^3.1.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.5.0"
+  }
+}

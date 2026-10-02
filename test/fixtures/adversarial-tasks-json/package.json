@@ -1,0 +1,9 @@
+{
+  "name": "teste-tecnico-api-pagamentos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desafio técnico: complete a rota de pagamentos.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

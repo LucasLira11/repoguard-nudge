@@ -1,0 +1,40 @@
+{
+  // Cada perfil compila a extensão, copia as fixtures para ../repoguard-fixtures
+  // (fora do projeto, para começarem SEM confiança) e abre uma delas no
+  // Extension Development Host.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "RepoGuard: adversarial-postinstall",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/../repoguard-fixtures/adversarial-postinstall"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "preparar depuração"
+    },
+    {
+      "name": "RepoGuard: adversarial-tasks-json",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/../repoguard-fixtures/adversarial-tasks-json"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "preparar depuração"
+    },
+    {
+      "name": "RepoGuard: benigno-com-build",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/../repoguard-fixtures/benigno-com-build"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "preparar depuração"
+    },
+    {
+      "name": "RepoGuard: benigno-simples",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/../repoguard-fixtures/benigno-simples"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "preparar depuração"
+    }
+  ]
+}
