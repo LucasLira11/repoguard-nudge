@@ -14,6 +14,19 @@ export class EvidencePanel implements vscode.Disposable {
   /** Consulta a situação do Docker/Podman; force ignora o cache. Definida na ativação. */
   private static checkSandbox: ((force: boolean) => Promise<DockerStatus>) | undefined;
 
+  /**
+   * Chamado ao desativar a extensão (janela fechando). Sem isto, quem fecha o
+   * VS Code com o alerta aberto, a desistência mais forte, não deixaria
+   * registro. Encerrar o processo à força (ex.: parar a depuração) não passa
+   * por aqui: nesse caso, painel_exibido sem evento de saída indica abandono.
+   */
+  static closeForShutdown(): void {
+    if (EvidencePanel.current !== undefined) {
+      EvidencePanel.current.closeVia = 'janela';
+      EvidencePanel.current.dispose();
+    }
+  }
+
   static configure(checkSandbox: (force: boolean) => Promise<DockerStatus>): void {
     EvidencePanel.checkSandbox = checkSandbox;
   }
@@ -29,7 +42,7 @@ export class EvidencePanel implements vscode.Disposable {
   private readonly inspected = new Set<string>();
   private usedSandbox = false;
   private sandbox: PanelModel['sandbox'];
-  private closeVia: 'botao' | 'aba' = 'aba';
+  private closeVia: 'botao' | 'aba' | 'janela' = 'aba';
 
   static show(
     folder: vscode.WorkspaceFolder,

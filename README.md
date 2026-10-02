@@ -26,7 +26,7 @@ npm run compile
 npm test
 ```
 
-O esperado é 127 testes aprovados e 3 pulados:
+O esperado é 132 testes aprovados e 3 pulados:
 - os dois testes de link simbólico de arquivo, que exigem privilégio no Windows;
 - a integração com Docker real, que só roda com `REPOGUARD_DOCKER_IT=1`.
 
@@ -105,7 +105,7 @@ Os pesos do motor ficam em `config/weights.json` e podem ser recalibrados sem re
 1. Instale a extensão (`.vsix`).
 2. Nas configurações de **usuário**, defina `repoguard.modo` (conforme o sorteio), `repoguard.participanteId`, `repoguard.desafioId` e `repoguard.caminhoRegistro`.
 3. Grupo experimental: rode **RepoGuard: Verificar ambiente** (Ctrl+Shift+P). Ele confere o Docker/Podman, oferece baixar a imagem (assim o primeiro sandbox não espera download), testa se o arquivo de registro pode ser gravado e mostra o participante e o modo. No grupo controle, rode a verificação **antes** de trocar o modo para `controle`, porque nesse modo o comando fica escondido.
-4. Confirme que o terminal integrado usa PowerShell, bash ou zsh. A captura de comandos do terminal depende da integração de shell do VS Code e **não funciona no cmd.exe**.
+4. **Terminal: use PowerShell.** A captura de comandos digitados depende da integração de shell do VS Code e **não funciona no cmd.exe**. O "Verificar ambiente" mostra o terminal padrão e, se for o cmd.exe, oferece trocar para o PowerShell com um clique. Mesmo sem captura, a extensão ainda registra a execução pelos arquivos que ela deixa (veja `execucao_hospedeiro` abaixo), mas aí sem saber qual comando foi.
 5. Ao fim, recolha o arquivo `.jsonl`.
 
 ### Formato do registro
@@ -120,16 +120,18 @@ Uma linha JSON por evento:
 
 | Evento | Detalhes principais |
 |---|---|
-| `workspace_aberto` | pasta, se já era confiável, modo |
+| `workspace_aberto` | pasta, se já era confiável, modo, `terminalPadrao` e `capturaTerminal` (se os comandos digitados podem ser registrados) |
 | `analise_concluida` | pontuação, nível, nº de evidências, famílias, multiplicador, `acimaDoLimiar`, duração |
 | `painel_exibido` | pontuação, nível, nº de evidências, famílias |
-| `painel_cancelado` | `via` (`botao` ou `aba`), tempo com o painel aberto, evidências inspecionadas |
+| `painel_cancelado` | `via` (`botao`, `aba` ou `janela`), tempo com o painel aberto, evidências inspecionadas |
 | `evidencia_inspecionada` | id, família, arquivo, linha |
 | `sandbox_executado` | origem (`painel` ou `comando`), comando, código de saída, liberações ativas |
 | `liberacao_solicitada` / `liberacao_concedida` / `liberacao_negada` | tipo; na negada, o motivo |
-| `execucao_hospedeiro` | origem: `terminal`, `tarefa`, `depurador` ou `liberacao` |
+| `execucao_hospedeiro` | origem: `terminal` (com o comando), `tarefa`, `depurador`, `liberacao` ou `arquivos` (apareceu `node_modules` ou lockfile na pasta real, com o `indicio`) |
 
-`analise_concluida` com `acimaDoLimiar: true` no grupo controle indica onde o alerta **teria** aparecido. `execucao_hospedeiro` com origem `terminal` é a forma de saber se alguém rodou `npm install` direto na máquina, nos dois grupos.
+`analise_concluida` com `acimaDoLimiar: true` no grupo controle indica onde o alerta **teria** aparecido. `execucao_hospedeiro` com origem `terminal` é a forma de saber se alguém rodou `npm install` direto na máquina, nos dois grupos. A origem `arquivos` é a rede de segurança para terminais sem captura (cmd.exe) ou fora do VS Code: como o sandbox nunca escreve na pasta real, um `node_modules` ou lockfile novo nela só aparece se a instalação rodou na máquina.
+
+**Abandono:** `painel_cancelado` com `via: janela` registra quem fechou o VS Code com o alerta aberto. Se o processo for encerrado à força (falta de energia, "parar" a depuração), nenhum evento de saída é gravado; na análise, trate um `painel_exibido` sem `painel_cancelado` ou `sandbox_executado` depois dele, na mesma `sessaoId`, como abandono.
 
 **Privacidade:** o registro não sai da máquina. Valores de variáveis liberadas e caminhos de pastas locais não são registrados. Segredos que apareçam em comandos digitados (`API_KEY=…`, tokens do GitHub, do npm e da AWS, `Bearer …`, senhas em URLs) são mascarados como `<omitido>`. Ainda assim, os comandos digitados no terminal são registrados: informe isso no termo de consentimento.
 
@@ -215,4 +217,5 @@ src/
 - **Rede local e metadados de nuvem:** com a rede ligada, o container ainda alcança serviços da rede local e, em máquinas virtuais de nuvem, o endpoint de metadados (169.254.169.254).
 - **Limites da análise estática:** `require(variavel)` dinâmico, código baixado em tempo de execução e dependências instaladas a partir de URLs git ou `.tgz` não são analisados. Nesses casos, a proteção é o container.
 - **Corpos de `class` no `setup.py`** são tratados como código que não roda no carregamento, embora em Python eles rodem.
+- **Indícios por arquivo:** se o repositório já traz o lockfile e a instalação não cria `node_modules` (projeto sem dependências), uma instalação no hospedeiro feita num terminal sem captura não deixa indício.
 - **Tarefas automáticas:** a API do VS Code não informa se uma tarefa iniciada era `folderOpen`. Cruze o nome registrado com o `tasks.json` do desafio.

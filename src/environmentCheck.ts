@@ -1,5 +1,7 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { checkDocker, cliFor, imageExists, pullImage, runtimeName } from './container';
+import { terminalCanBeCaptured } from './hostMarkers';
 import { checkWritable } from './telemetry';
 import { ExtensionSettings } from './types';
 
@@ -76,6 +78,15 @@ export async function verifyEnvironment(settings: ExtensionSettings, logFile: st
       ? { ok: true, texto: `Participante: ${settings.participanteId}.` }
       : { ok: false, texto: 'repoguard.participanteId não definido (o registro usará "nao-definido").' },
   );
+  // Sem integração de shell, o registro não vê os comandos digitados (só os
+  // indícios por arquivo). No experimento isso compromete a variável principal.
+  const shellName = path.basename(vscode.env.shell) || 'desconhecido';
+  const capturable = terminalCanBeCaptured(vscode.env.shell);
+  lines.push(
+    capturable
+      ? { ok: true, texto: `Terminal padrão: ${shellName} (comandos digitados são registrados).` }
+      : { ok: false, texto: `Terminal padrão: ${shellName}. Comandos digitados nele não podem ser registrados; use o PowerShell.` },
+  );
   lines.push({ ok: true, texto: `Modo: ${settings.modo} · grupo: ${settings.grupo}.` });
 
   const allOk = lines.every((l) => l.ok);
@@ -84,13 +95,21 @@ export async function verifyEnvironment(settings: ExtensionSettings, logFile: st
     await vscode.window.showInformationMessage('RepoGuard: ambiente pronto.', { modal: true, detail });
   } else {
     const guia = 'Como habilitar o sandbox';
+    const powershell = 'Usar PowerShell no terminal';
     const choice = await vscode.window.showWarningMessage(
       'RepoGuard: o ambiente precisa de ajustes.',
       { modal: true, detail },
       ...(status.disponivel ? [] : [guia]),
+      ...(!capturable && process.platform === 'win32' ? [powershell] : []),
     );
     if (choice === guia) {
       await vscode.commands.executeCommand('repoguard.guiaInstalacao');
+    } else if (choice === powershell) {
+      // Alteração nas configurações de usuário, feita só com o clique explícito do pesquisador.
+      await vscode.workspace
+        .getConfiguration('terminal.integrated')
+        .update('defaultProfile.windows', 'PowerShell', vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage('RepoGuard: terminal padrão alterado para PowerShell. Abra um terminal novo para valer.');
     }
   }
 }

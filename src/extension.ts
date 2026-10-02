@@ -6,7 +6,8 @@ import { DockerStatus, checkDocker, cliFor } from './container';
 import { LoadedWeights, loadWeights, shouldAlert } from './engine';
 import { verifyEnvironment } from './environmentCheck';
 import { openInstallGuide } from './guide';
-import { watchHostExecution } from './hostActivity';
+import { watchHostArtifacts, watchHostExecution } from './hostActivity';
+import { terminalCanBeCaptured } from './hostMarkers';
 import { EvidencePanel } from './panel';
 import { RecordEvent, SandboxController } from './sandboxCommands';
 import { EventLog, resolveLogPath } from './telemetry';
@@ -49,6 +50,8 @@ function sandboxStatus(): Promise<DockerStatus> {
 
 /** Folders já processadas nesta sessão, para não repetir a análise automática. */
 const handledFolders = new Set<string>();
+/** Observadores de indícios de execução no hospedeiro, por pasta. */
+const artifactWatchers = new Map<string, vscode.Disposable>();
 /** Último resultado por pasta, usado no painel e nos alertas de liberação. */
 const analyses = new Map<string, AnalysisResult>();
 
@@ -108,6 +111,8 @@ export function activate(context: vscode.ExtensionContext): void {
       for (const folder of event.removed) {
         handledFolders.delete(folder.uri.toString());
         analyses.delete(folder.uri.toString());
+        artifactWatchers.get(folder.uri.toString())?.dispose();
+        artifactWatchers.delete(folder.uri.toString());
       }
     }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => {
@@ -129,6 +134,12 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export async function deactivate(): Promise<void> {
+  // Fechar a janela com o painel aberto também é desistir: registra antes de gravar o que falta.
+  EvidencePanel.closeForShutdown();
+  for (const watcher of artifactWatchers.values()) {
+    watcher.dispose();
+  }
+  artifactWatchers.clear();
   handledFolders.clear();
   analyses.clear();
   await eventLog?.flush();
@@ -187,7 +198,16 @@ async function handleFolder(folder: vscode.WorkspaceFolder): Promise<void> {
   }
   handledFolders.add(key);
   debug(`Workspace aberto: ${folder.name} (confiável: ${vscode.workspace.isTrusted}, modo: ${settings.modo})`);
-  record('workspace_aberto', { pasta: folder.name, confiavel: vscode.workspace.isTrusted, modo: settings.modo });
+  artifactWatchers.set(key, watchHostArtifacts(folder, record));
+  record('workspace_aberto', {
+    pasta: folder.name,
+    confiavel: vscode.workspace.isTrusted,
+    modo: settings.modo,
+    // Sem captura (cmd.exe), comandos digitados não aparecem no registro;
+    // só os indícios por arquivo. Fica registrado para a análise dos dados.
+    terminalPadrao: path.basename(vscode.env.shell),
+    capturaTerminal: terminalCanBeCaptured(vscode.env.shell),
+  });
 
   const resultado = await analyzeFolder(folder, 'abertura');
   if (resultado === undefined || !shouldAlert(resultado)) {
