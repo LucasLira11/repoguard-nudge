@@ -26,7 +26,7 @@ npm run compile
 npm test
 ```
 
-O esperado é 132 testes aprovados e 3 pulados:
+O esperado é 140 testes aprovados e 3 pulados:
 - os dois testes de link simbólico de arquivo, que exigem privilégio no Windows;
 - a integração com Docker real, que só roda com `REPOGUARD_DOCKER_IT=1`.
 
@@ -104,9 +104,18 @@ Os pesos do motor ficam em `config/weights.json` e podem ser recalibrados sem re
 
 1. Instale a extensão (`.vsix`).
 2. Nas configurações de **usuário**, defina `repoguard.modo` (conforme o sorteio), `repoguard.participanteId`, `repoguard.desafioId` e `repoguard.caminhoRegistro`.
-3. Grupo experimental: rode **RepoGuard: Verificar ambiente** (Ctrl+Shift+P). Ele confere o Docker/Podman, oferece baixar a imagem (assim o primeiro sandbox não espera download), testa se o arquivo de registro pode ser gravado e mostra o participante e o modo. No grupo controle, rode a verificação **antes** de trocar o modo para `controle`, porque nesse modo o comando fica escondido.
-4. **Terminal: use PowerShell.** A captura de comandos digitados depende da integração de shell do VS Code e **não funciona no cmd.exe**. O "Verificar ambiente" mostra o terminal padrão e, se for o cmd.exe, oferece trocar para o PowerShell com um clique. Mesmo sem captura, a extensão ainda registra a execução pelos arquivos que ela deixa (veja `execucao_hospedeiro` abaixo), mas aí sem saber qual comando foi.
-5. Ao fim, recolha o arquivo `.jsonl`.
+3. **Crie uma pasta vazia no local onde os desafios serão colocados** (ex.: `Downloads\verificacao`) e abra-a no VS Code. A confiança é herdada da pasta-mãe, então essa pasta mostra como o desafio vai abrir.
+4. Rode **RepoGuard: Verificar ambiente** (Ctrl+Shift+P). Ele confere e oferece corrigir com um clique:
+   - Docker/Podman rodando, com a opção de baixar a imagem antes (o primeiro sandbox não espera download);
+   - registro gravável, participante definido, modo e grupo;
+   - terminal com captura de comandos;
+   - **confiança:** se a pasta aberta já é confiável (✖, com o botão **Gerenciar pastas confiáveis**) e se a pergunta "Você confia nos autores?" está ligada (⚠, com o botão **Ligar a pergunta de confiança**).
+
+   No grupo controle, rode a verificação **antes** de trocar o modo para `controle`, porque nesse modo o comando fica escondido.
+5. **Terminal: use PowerShell.** A captura de comandos digitados depende da integração de shell do VS Code e **não funciona no cmd.exe**. O "Verificar ambiente" mostra o terminal padrão e, se for o cmd.exe, oferece trocar para o PowerShell com um clique. Mesmo sem captura, a extensão ainda registra a execução pelos arquivos que ela deixa (veja `execucao_hospedeiro` abaixo), mas aí sem saber qual comando foi.
+6. **Confiança: a pasta do desafio tem que abrir em modo restrito.** O VS Code confia em todas as subpastas de uma pasta da lista de confiança. Se `Documents`, `Downloads` ou um disco inteiro (`D:\`) estiverem na lista, o desafio abre confiável sem perguntar nada, e o cenário do estudo deixa de existir. Remova essas entradas em **Ctrl+Shift+P → Workspaces: Manage Workspace Trust**.
+7. **Decida se o grupo controle vê a pergunta de confiança.** No VS Code atual (verificado na versão 1.140), `security.workspace.trust.startupPrompt` vem como `never`: a pergunta "Você confia nos autores?" não aparece, e uma pasta desconhecida abre direto em modo restrito, só com uma faixa no topo. Se a condição de controle for "o VS Code com o diálogo clássico", mude para `once` em todas as máquinas e descreva isso no método. Se for "o VS Code como vem", mantenha `never` e descreva também. O `workspace_aberto` registra `confiavel` em cada abertura, o que permite conferir depois.
+8. Ao fim, recolha o arquivo `.jsonl`.
 
 ### Formato do registro
 
