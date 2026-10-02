@@ -6,6 +6,10 @@
   "publisher": "repoguard-research",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LucasLira11/repoguard-nudge.git"
+  },
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -182,7 +186,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "jest",
-    "package": "vsce package --skip-license --allow-missing-repository",
+    "package": "vsce package --skip-license",
     "fixtures:copiar": "node scripts/copy-fixtures.js"
   },
   "dependencies": {
